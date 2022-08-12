@@ -6,12 +6,11 @@ import {registerValidation, loginValidation, postCreateValidation} from './valid
 import {handelsValidationErrors, checkAuth} from './utils/index.js';
 import fs from 'fs';
 
-mongoose.connect('mongodb+srv://admin:wwwwww@cluster0.wuld65p.mongodb.net/blog?retryWrites=true&w=majority')
+mongoose.connect(process.env.DB_URL)
 .then(() => console.log('[DataBase] Connect OK'))
 .catch(err => console.log('[DataBase] Connect error', err))
 
-const PORT = 4444;
-export const SECRET = '10'
+export const SECRET = process.env.SECRET
 
 const app = express();
 
@@ -69,7 +68,7 @@ app.delete('/posts/:id', checkAuth, PostController.removePost);
 
 app.patch('/posts/:id', checkAuth, postCreateValidation, handelsValidationErrors, PostController.updatePost);
 
-app.listen(PORT, (err)=> {
+app.listen(process.env.PORT , (err)=> {
     if(err){
        return console.log(err);
     }
