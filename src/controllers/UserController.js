@@ -3,11 +3,12 @@ import bcrypt from "bcrypt";
 import UserModal from "../models/User.js";
 import { SECRET } from "../index.js";
 
+
 export const register = async (req, res) => {
     try {
         
 
-        const salt = await bcrypt.genSalt(10);
+        const salt = await bcrypt.genSalt(process.env.SALT);
         const password = await bcrypt.hash(req.body.password, salt);
 
         const doc = new UserModal({
@@ -17,26 +18,31 @@ export const register = async (req, res) => {
             passwordHash: password,
         });
 
-        const user = await doc.save();
+        if(SECRET){
+            const user = await doc.save();
 
-        const token = jwt.sign(
-            {
-                _id: user._id,
-            },
-            SECRET,
-            {
-                expiresIn: "30d",
-            }
-        );
-
-        const { passwordHash, ...userData } = user._doc;
-        res.json({
-            success: true,
-            user: {
-                ...userData,
-                token,
-            },
-        });
+                const token = jwt.sign(
+                    {
+                        _id: user._id,
+                    },
+                    SECRET,
+                    {
+                        expiresIn: "30d",
+                    }
+                );
+        
+                const { passwordHash, ...userData } = user._doc;
+                res.json({
+                    success: true,
+                    user: {
+                        ...userData,
+                        token,
+                    },
+                });
+        }else{
+            throw new Error('[SECRET = undefined]');
+        }
+        
     } catch (err) {
         console.log(err);
         res.status(500).json({

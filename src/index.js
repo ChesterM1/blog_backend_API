@@ -5,12 +5,15 @@ import { PostController, UserController } from './controllers/index.js';
 import {registerValidation, loginValidation, postCreateValidation} from './validation/validation.js';
 import {handelsValidationErrors, checkAuth} from './utils/index.js';
 import fs from 'fs';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 mongoose.connect(process.env.DB_URL)
 .then(() => console.log('[DataBase] Connect OK'))
 .catch(err => console.log('[DataBase] Connect error', err))
 
-export const SECRET = process.env.SECRET
+export const SECRET = process.env.SECRET;
 
 const app = express();
 
@@ -48,7 +51,7 @@ app.use('/uploads',checkAuth, upload.single('image'), (req,res)=>{
       return res.status(500).json({msg: 'Ошибка загрузки файла'});
     }
 
-    res.json({msg: `http://localhost:4444/uploads/${req.file.originalname}`})
+    res.json({msg: `/uploads/${req.file.originalname}`})
 });
 
 
