@@ -53,7 +53,7 @@ export const getOnesPost =  (req, res)=>{
                 {
                     returnDocument: 'after'
                 },
-                (err, doc)=>{
+                async (err, doc)=>{
                     if(err){
                         console.log('[getOnesPost/findOneAndUpdate]', err);
                         return res.status(500).json({message: 'Не удалось получить статью'});
@@ -61,8 +61,11 @@ export const getOnesPost =  (req, res)=>{
                     if(!doc){
                         return res.status(404).json({ message: 'Статья не найдена'});
                     };
+                    const {user} = doc;
+                    const {passwordHash, ...newUser} = user._doc;
+                    doc.user = newUser;
                     res.json(doc)
-                });
+                }).populate('user'); 
             }
 
         }catch(err){

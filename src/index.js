@@ -4,6 +4,7 @@ import multer from 'multer';
 import { PostController, UserController } from './controllers/index.js';
 import {registerValidation, loginValidation, postCreateValidation} from './validation/validation.js';
 import {handelsValidationErrors, checkAuth} from './utils/index.js';
+import fs from 'fs';
 
 mongoose.connect('mongodb+srv://admin:wwwwww@cluster0.wuld65p.mongodb.net/blog?retryWrites=true&w=majority')
 .then(() => console.log('[DataBase] Connect OK'))
@@ -19,6 +20,9 @@ app.use('/uploads', express.static('uploads'));
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
+      if(!fs.existsSync('uploads')){
+         fs.mkdirSync('uploads');
+      }
       cb(null, 'uploads')
     },
     filename: function (req, file, cb) {
@@ -26,11 +30,26 @@ const storage = multer.diskStorage({
     }
   });
 
-const upload = multer({storage});
+const fileFilter = (req, file, cb) => {
+  if(file.mimetype === 'image/jpeg'
+    ||file.mimetype === 'image/jpg'
+    ||file.mimetype === 'image/png'){
+      cb(null, true);
+    }else{
+      cb(null, false)
+    }
+}
+
+const upload = multer({storage, fileFilter});
 
 app.use('/uploads',checkAuth, upload.single('image'), (req,res)=>{
     
-    res.json({msg: req.file.originalname})
+    const file = req.file;
+    if(!file){
+      return res.status(500).json({msg: 'Ошибка загрузки файла'});
+    }
+
+    res.json({msg: `http://localhost:4444/uploads/${req.file.originalname}`})
 });
 
 
