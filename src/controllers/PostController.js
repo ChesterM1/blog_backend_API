@@ -25,6 +25,7 @@ export const getAllPosts = async (req, res)=>{
         const posts = await PostModal.find().populate('user').exec();
 
         for(let item of posts){
+            console.log(item);
             const {...user} = item.user._doc;
             delete user.passwordHash;
             item.user._doc = user;

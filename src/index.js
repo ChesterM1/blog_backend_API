@@ -6,6 +6,7 @@ import {registerValidation, loginValidation, postCreateValidation} from './valid
 import {handelsValidationErrors, checkAuth} from './utils/index.js';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import cors from 'cors';
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ export const SECRET = process.env.SECRET;
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
