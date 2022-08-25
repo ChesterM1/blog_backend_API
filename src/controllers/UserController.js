@@ -2,15 +2,14 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import UserModal from "../models/User.js";
 import { SECRET } from "../index.js";
-
+import dotenv from "dotenv";
+dotenv.config();
 
 export const register = async (req, res) => {
     try {
-        
-
-        const salt = await bcrypt.genSalt(process.env.SALT);
+        const salt = await bcrypt.genSalt(Number(process.env.SALT));
         const password = await bcrypt.hash(req.body.password, salt);
-
+        console.log(salt);
         const doc = new UserModal({
             email: req.body.email,
             fullName: req.body.fullName,
@@ -18,33 +17,36 @@ export const register = async (req, res) => {
             passwordHash: password,
         });
 
-        if(SECRET){
+        if (SECRET) {
             const user = await doc.save();
 
-                const token = jwt.sign(
-                    {
-                        _id: user._id,
-                    },
-                    SECRET,
-                    {
-                        expiresIn: "30d",
-                    }
-                );
-        
-                const { passwordHash, ...userData } = user._doc;
-                res.json({
-                    success: true,
-                    user: {
-                        ...userData,
-                        token,
-                    },
-                });
-        }else{
-            throw new Error('[SECRET = undefined]');
+            const token = jwt.sign(
+                {
+                    _id: user._id,
+                },
+                SECRET,
+                {
+                    expiresIn: "30d",
+                }
+            );
+
+            const { passwordHash, ...userData } = user._doc;
+            res.json({
+                success: true,
+                user: {
+                    ...userData,
+                    token,
+                },
+            });
+        } else {
+            throw new Error("[SECRET = undefined]");
         }
-        
     } catch (err) {
-        console.log(err);
+        if (err.code === 11000) {
+            return res.status(500).json({
+                message: "Email is invalid or already taken",
+            });
+        }
         res.status(500).json({
             massage: "Не удалось зарегистрироваться",
         });
