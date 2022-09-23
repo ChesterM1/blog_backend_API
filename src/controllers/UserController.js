@@ -2,8 +2,6 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import UserModal from "../models/User.js";
 import { SECRET } from "../index.js";
-import dotenv from "dotenv";
-dotenv.config();
 
 export const register = async (req, res) => {
     try {
@@ -30,9 +28,8 @@ export const register = async (req, res) => {
                 }
             );
 
-            const { passwordHash, ...userData } = user._doc;
+            const { passwordHash, __v, ...userData } = user._doc;
             res.json({
-                success: true,
                 user: {
                     ...userData,
                     token,
@@ -84,9 +81,8 @@ export const login = async (req, res) => {
             }
         );
 
-        const { passwordHash, ...userData } = user._doc;
+        const { passwordHash, __v, ...userData } = user._doc;
         res.json({
-            success: true,
             user: {
                 ...userData,
                 token,

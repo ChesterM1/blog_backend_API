@@ -13,13 +13,12 @@ import dotenv from "dotenv";
 import cors from "cors";
 
 dotenv.config();
+export const SECRET = process.env.SECRET;
 
 mongoose
     .connect(process.env.DB_URL)
     .then(() => console.log("[DataBase] Connect OK"))
     .catch((err) => console.log("[DataBase] Connect error", err));
-
-export const SECRET = process.env.SECRET;
 
 const app = express();
 
@@ -92,6 +91,7 @@ app.get("/posts/:id", PostController.getOnesPost);
 
 app.delete("/posts/:id", checkAuth, PostController.removePost);
 
+app.post("/posts/like/:id", checkAuth, PostController.likePost);
 app.patch(
     "/posts/:id",
     checkAuth,
