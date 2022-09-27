@@ -1,11 +1,14 @@
 import PostModal from "../models/Post.js";
 
 export const createPost = async (req, res) => {
+    console.log(req.body);
     try {
         const doc = new PostModal({
             title: req.body.title,
             text: req.body.text,
-            imageUrl: req.body.imageUrl,
+            imageUrl: req.file
+                ? `/uploads/${req.file.originalname}`
+                : undefined,
             tags: req.body.tags,
             user: req.userId,
         });
@@ -29,7 +32,7 @@ export const getAllPosts = async (req, res) => {
             item.user._doc = user;
         }
 
-        res.json(posts);
+        res.json(posts.reverse());
     } catch (err) {
         console.log("[getAppPosts]", err);
         res.status(500).json({
@@ -138,7 +141,6 @@ export const likePost = async (req, res) => {
     try {
         const postId = req.params.id;
         const userId = req.body.userId;
-
         if (!postId || !userId) {
             return res
                 .status(403)
@@ -146,13 +148,14 @@ export const likePost = async (req, res) => {
         }
         const post = await PostModal.findById(postId);
         const userIdLike = post?.like.find((elem) => elem === userId);
+
         let updatePost;
 
         if (userIdLike) {
-            updatePost = await PostModal.findOneAndUpdate({
-                _id: postId,
-                like: post.like.filter((elem) => elem !== userId),
-            });
+            updatePost = await PostModal.findOneAndUpdate(
+                { _id: postId },
+                { $pull: { like: userId } }
+            );
         } else {
             updatePost = await PostModal.findOneAndUpdate(
                 { _id: postId },
@@ -164,9 +167,11 @@ export const likePost = async (req, res) => {
             );
         }
 
-        if (updatePost) res.status(200).json(updatePost);
+        res.status(200).json(`post ${postId} liked`);
     } catch (err) {
-        res.status(500).json({ message: "server error" });
+        res.status(500).json({
+            message: `Post like failed, server error`,
+        });
         console.log(`[PostController.likePost] ${err}`);
     }
 };
