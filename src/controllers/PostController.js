@@ -9,7 +9,7 @@ export const createPost = async (req, res) => {
             imageUrl: req.file
                 ? `/uploads/${req.file.originalname}`
                 : undefined,
-            tags: req.body.tags,
+            tags: req.body.tags?.split(",") || [],
             user: req.userId,
         });
         const post = await doc.save();

@@ -25,6 +25,9 @@ export const postCreateValidation = [
     body("text", "Текс статьи минимум 10 символов")
         .isLength({ min: 5 })
         .isString(),
-    body("tags", "Неверный формат тегов (укажите массив)").optional().isArray(),
+    body("tags", "Неверный формат тегов (формат #one, #two)")
+        .optional()
+        .isString()
+        .matches(/(^#\S\w*)(,\s#\w*)*?\S$/),
     body("imageUrl", "Неверная ссылка на изображжение").optional().isString(),
 ];
