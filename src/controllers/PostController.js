@@ -1,7 +1,8 @@
 import PostModal from "../models/Post.js";
+import fs from "fs";
 
 export const createPost = async (req, res) => {
-    console.log(req.body);
+    console.log(req.file);
     try {
         const doc = new PostModal({
             title: req.body.title,
@@ -102,6 +103,22 @@ export const removePost = (req, res) => {
                         return res
                             .status(404)
                             .json({ message: "Статья не найдена" });
+                    }
+
+                    const imgName = doc.imageUrl;
+                    try {
+                        imgName &&
+                            fs.unlink(`.${imgName}`, (err) => {
+                                if (err) {
+                                    console.log(
+                                        `[POST_DELETE_FILE ERROR] ${err}`
+                                    );
+                                } else {
+                                    console.log(`[POST_DELETE_FILE COMPILE`);
+                                }
+                            });
+                    } catch (err) {
+                        console.log(`[POST_DELETE_FILE ERROR] ${err}`);
                     }
                     res.json(doc);
                 }
