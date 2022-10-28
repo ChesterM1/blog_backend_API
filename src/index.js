@@ -10,7 +10,7 @@ import { handelsValidationErrors, checkAuth } from "./utils/index.js";
 
 import dotenv from "dotenv";
 import cors from "cors";
-import { upload } from "./utils/IMGPostLoader.js";
+import { upload } from "./utils/IMGPostService.js";
 
 dotenv.config();
 export const SECRET = process.env.SECRET;
@@ -62,6 +62,7 @@ app.post("/posts/like/:id", checkAuth, PostController.likePost);
 app.patch(
     "/posts/:id",
     checkAuth,
+    upload.single("image"),
     postCreateValidation,
     handelsValidationErrors,
     PostController.updatePost

@@ -1,8 +1,7 @@
 import PostModal from "../models/Post.js";
-import fs from "fs";
+import { removeImg } from "../utils/IMGPostService.js";
 
 export const createPost = async (req, res) => {
-    console.log(req.file);
     try {
         const doc = new PostModal({
             title: req.body.title,
@@ -105,21 +104,7 @@ export const removePost = (req, res) => {
                             .json({ message: "Статья не найдена" });
                     }
 
-                    const imgName = doc.imageUrl;
-                    try {
-                        imgName &&
-                            fs.unlink(`.${imgName}`, (err) => {
-                                if (err) {
-                                    console.log(
-                                        `[POST_DELETE_FILE ERROR] ${err}`
-                                    );
-                                } else {
-                                    console.log(`[POST_DELETE_FILE COMPILE`);
-                                }
-                            });
-                    } catch (err) {
-                        console.log(`[POST_DELETE_FILE ERROR] ${err}`);
-                    }
+                    removeImg(doc.imageUrl);
                     res.json(doc);
                 }
             );
@@ -133,7 +118,21 @@ export const removePost = (req, res) => {
 export const updatePost = async (req, res) => {
     try {
         const id = req.params.id;
+
         if (id) {
+            const post = await PostModal.findById(id);
+            if (!req.file || !req.body.image) {
+                removeImg(post.imageUrl);
+            }
+
+            let image = "";
+            if (req.file) {
+                image = `/uploads/${req.file.originalname}`;
+            } else if (req.body.image) {
+                image = req.body.image;
+            }
+            console.log(req.body);
+
             await PostModal.updateOne(
                 {
                     _id: id,
@@ -141,7 +140,7 @@ export const updatePost = async (req, res) => {
                 {
                     title: req.body.title,
                     text: req.body.text,
-                    imageUrl: req.body.imageUrl,
+                    imageUrl: image,
                     tags: req.body.tags,
                     user: req.userId,
                 }

@@ -23,7 +23,7 @@ const PostSchema = new mongoose.Schema(
             ref: "UserModal",
             required: true,
         },
-        imageUrl: String,
+        imageUrl: String || Undefined,
         like: {
             type: Array,
             default: [],

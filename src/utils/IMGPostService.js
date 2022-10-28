@@ -26,3 +26,20 @@ const fileFilter = (req, file, cb) => {
 };
 
 export const upload = multer({ storage, fileFilter });
+
+export const removeImg = (imgName) => {
+    if (!imgName) {
+        return;
+    }
+    try {
+        fs.unlink(`.${imgName}`, (err) => {
+            if (err) {
+                console.log(`[REMOVE IMG ERROR] ${err}`);
+            } else {
+                console.log(`[REMOVE IMG COMPILE`);
+            }
+        });
+    } catch (err) {
+        console.log(`[REMOVE IMG ERROR] ${err}`);
+    }
+};
