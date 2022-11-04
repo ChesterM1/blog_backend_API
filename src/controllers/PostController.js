@@ -9,7 +9,7 @@ export const createPost = async (req, res) => {
             imageUrl: req.file
                 ? `/uploads/${req.file.originalname}`
                 : undefined,
-            tags: req.body.tags?.split(",") || [],
+            tags: req.body.tags?.split(", ") || [],
             user: req.userId,
         });
         const post = await doc.save();
@@ -17,22 +17,36 @@ export const createPost = async (req, res) => {
     } catch (err) {
         console.log("[CreatePost]", err);
         res.status(500).json({
-            message: "Не удалось создать стастью",
+            message: "Не удалось создать статью",
         });
     }
 };
 
 export const getAllPosts = async (req, res) => {
+    const { limit } = req.query;
     try {
-        const posts = await PostModal.find().populate("user").exec();
+        const postsCount = await PostModal.count();
+
+        const posts = await PostModal.find()
+            .sort([["createdAt", -1]])
+            .limit(limit)
+            .populate("user")
+            .exec();
 
         for (let item of posts) {
             const { ...user } = item.user._doc;
             delete user.passwordHash;
             item.user._doc = user;
         }
-
-        res.json(posts.reverse());
+        if (limit) {
+            res.json({
+                data: posts,
+                totalPost: postsCount,
+                sendPost: limit > posts.length ? posts.length : parseInt(limit),
+            });
+        } else {
+            res.json(posts);
+        }
     } catch (err) {
         console.log("[getAppPosts]", err);
         res.status(500).json({
@@ -141,7 +155,7 @@ export const updatePost = async (req, res) => {
                     title: req.body.title,
                     text: req.body.text,
                     imageUrl: image,
-                    tags: req.body.tags,
+                    tags: req.body.tags?.split(", ") || [],
                     user: req.userId,
                 }
             );
@@ -165,15 +179,13 @@ export const likePost = async (req, res) => {
         const post = await PostModal.findById(postId);
         const userIdLike = post?.like.find((elem) => elem === userId);
 
-        let updatePost;
-
         if (userIdLike) {
-            updatePost = await PostModal.findOneAndUpdate(
+            await PostModal.findOneAndUpdate(
                 { _id: postId },
                 { $pull: { like: userId } }
             );
         } else {
-            updatePost = await PostModal.findOneAndUpdate(
+            await PostModal.findOneAndUpdate(
                 { _id: postId },
                 {
                     $push: {
