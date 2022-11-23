@@ -7,7 +7,7 @@ export const register = async (req, res) => {
     try {
         const salt = await bcrypt.genSalt(Number(process.env.SALT));
         const password = await bcrypt.hash(req.body.password, salt);
-        console.log(salt);
+
         const doc = new UserModal({
             email: req.body.email,
             fullName: req.body.fullName,

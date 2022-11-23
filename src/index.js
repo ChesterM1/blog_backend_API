@@ -1,6 +1,10 @@
 import express from "express";
 import mongoose from "mongoose";
-import { PostController, UserController } from "./controllers/index.js";
+import {
+    PostController,
+    TagsController,
+    UserController,
+} from "./controllers/index.js";
 import {
     registerValidation,
     loginValidation,
@@ -53,7 +57,7 @@ app.post(
 
 app.get("/posts", PostController.getAllPosts);
 
-app.get("/posts/:id", PostController.getOnesPost);
+app.get("/posts/:id", PostController.getOnePost);
 
 app.delete("/posts/:id", checkAuth, PostController.removePost);
 
@@ -67,6 +71,8 @@ app.patch(
     handelsValidationErrors,
     PostController.updatePost
 );
+
+app.get("/tags", TagsController.getAllTags);
 
 app.listen(process.env.PORT, (err) => {
     if (err) {

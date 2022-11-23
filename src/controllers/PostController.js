@@ -1,19 +1,54 @@
+import { ObjectId } from "mongodb";
 import PostModal from "../models/Post.js";
+import TagsModal from "../models/Tags.js";
+import TagsInPost from "../models/TagsInPost.js";
 import { removeImg } from "../utils/IMGPostService.js";
+import bodyStrReplace from "../utils/bodyStrReplace.js";
+import { TagsController } from "./index.js";
 
 export const createPost = async (req, res) => {
     try {
+        // Create tags
+        const tags = bodyStrReplace(req.body.tags)?.split(", ") || [];
+
+        const tagsSettledResult = await Promise.allSettled(
+            tags.map(async (tag) => {
+                return await TagsModal.findOneAndUpdate(
+                    { name: tag },
+                    {},
+                    { upsert: true, new: true }
+                );
+            })
+        );
+
+        const tagsEntities = tagsSettledResult.map((item) => item.value);
+
+        // Create post
         const doc = new PostModal({
-            title: req.body.title,
-            text: req.body.text,
-            imageUrl: req.file
-                ? `/uploads/${req.file.originalname}`
-                : undefined,
-            tags: req.body.tags?.split(", ") || [],
+            title: bodyStrReplace(req.body.title),
+            text: bodyStrReplace(req.body.text),
+            imageUrl: req.file ? `/uploads/${req.fileName}` : undefined,
+            tags: bodyStrReplace(req.body.tags)?.split(", ") || [],
             user: req.userId,
         });
+
         const post = await doc.save();
-        res.json({ post });
+
+        // Create references from tags and post
+        await TagsInPost.insertMany(
+            tagsEntities.map((tagEntity) => ({
+                postId: post._id,
+                tagsId: tagEntity._id,
+            }))
+        );
+
+        // Returning data
+        res.json({
+            post: {
+                ...post._doc,
+                tags: tagsEntities.map((tag) => tag.name),
+            },
+        });
     } catch (err) {
         console.log("[CreatePost]", err);
         res.status(500).json({
@@ -26,7 +61,6 @@ export const getAllPosts = async (req, res) => {
     const { limit } = req.query;
     try {
         const postsCount = await PostModal.count();
-
         const posts = await PostModal.find()
             .sort([["createdAt", -1]])
             .limit(limit)
@@ -38,9 +72,25 @@ export const getAllPosts = async (req, res) => {
             delete user.passwordHash;
             item.user._doc = user;
         }
+
+        const getTags = await TagsInPost.find({
+            postId: { $in: posts.map((post) => post._id) },
+        }).populate("tagsId");
+
+        const postWithTags = posts.map((post) => {
+            const tagFilter = getTags.filter(
+                (tag) => tag.postId.toString() === post._doc._id.toString()
+            );
+
+            return {
+                ...post._doc,
+                tags: tagFilter.map((tag) => tag.tagsId.name),
+            };
+        });
+
         if (limit) {
             res.json({
-                data: posts,
+                data: postWithTags,
                 totalPost: postsCount,
                 sendPost: limit > posts.length ? posts.length : parseInt(limit),
             });
@@ -55,7 +105,7 @@ export const getAllPosts = async (req, res) => {
     }
 };
 
-export const getOnesPost = (req, res) => {
+export const getOnePost = (req, res) => {
     try {
         const id = req.params.id;
         if (id) {
@@ -84,7 +134,16 @@ export const getOnesPost = (req, res) => {
                     const { user } = doc;
                     const { passwordHash, ...newUser } = user._doc;
                     doc.user = newUser;
-                    res.json(doc);
+
+                    const findTags = await TagsInPost.find({
+                        postId: { $in: doc._id },
+                    }).populate("tagsId");
+
+                    const post = {
+                        ...doc._doc,
+                        tags: findTags.map((tag) => tag.tagsId.name),
+                    };
+                    res.json(post);
                 }
             ).populate("user");
         }
@@ -96,11 +155,25 @@ export const getOnesPost = (req, res) => {
     }
 };
 
-export const removePost = (req, res) => {
+export const removePost = async (req, res) => {
     try {
         const id = req.params.id;
 
         if (id) {
+            const findTags = await TagsInPost.find({
+                postId: id,
+            }).select("tagsId");
+
+            await TagsInPost.deleteMany({ postId: id });
+
+            for (const tag of findTags) {
+                const count = await TagsInPost.count({ tagsId: tag.tagsId });
+                if (count > 0) {
+                    continue;
+                }
+                await TagsModal.deleteOne({ _id: tag.tagsId });
+            }
+
             PostModal.findOneAndDelete(
                 {
                     _id: id,
@@ -135,27 +208,75 @@ export const updatePost = async (req, res) => {
 
         if (id) {
             const post = await PostModal.findById(id);
-            if (!req.file || !req.body.image) {
+            if (req.fileName || !req.body.image) {
                 removeImg(post.imageUrl);
             }
 
             let image = "";
-            if (req.file) {
-                image = `/uploads/${req.file.originalname}`;
+            if (req.fileName) {
+                image = `/uploads/${req.fileName}`;
             } else if (req.body.image) {
                 image = req.body.image;
             }
-            console.log(req.body);
+
+            //TAGS
+            const tags = bodyStrReplace(req.body.tags)?.split(", ") || [];
+
+            const findOldTags = await TagsInPost.find({ postId: id }).populate(
+                "tagsId"
+            );
+
+            const tagsSettledResult = await Promise.allSettled(
+                tags.map(async (tag) => {
+                    return await TagsModal.findOneAndUpdate(
+                        { name: tag },
+                        {},
+                        { upsert: true, new: true }
+                    );
+                })
+            );
+
+            const saveTagsResult = tagsSettledResult.map((item) => item.value);
+            //save new tags
+            const tagsName = findOldTags.map((tag) => tag.tagsId.name);
+            for (const tag of saveTagsResult) {
+                if (tags.includes(tag.name) && !tagsName.includes(tag.name)) {
+                    await TagsInPost.collection.insertOne({
+                        tagsId: tag._id,
+                        postId: ObjectId(id),
+                    });
+                }
+            }
+
+            // remove old reference tag
+            for (const tag of findOldTags) {
+                if (!tags.includes(tag.tagsId.name)) {
+                    await TagsInPost.deleteOne({
+                        tagsId: tag.tagsId._id,
+                        postId: id,
+                    });
+                }
+            }
+
+            //delete un usage tags
+            for (const tag of findOldTags) {
+                const count = await TagsInPost.count({
+                    tagsId: tag.tagsId._id,
+                });
+                if (count > 0) {
+                    continue;
+                }
+                await TagsModal.deleteOne({ _id: tag.tagsId._id });
+            }
 
             await PostModal.updateOne(
                 {
                     _id: id,
                 },
                 {
-                    title: req.body.title,
-                    text: req.body.text,
+                    title: bodyStrReplace(req.body.title),
+                    text: bodyStrReplace(req.body.text),
                     imageUrl: image,
-                    tags: req.body.tags?.split(", ") || [],
                     user: req.userId,
                 }
             );
