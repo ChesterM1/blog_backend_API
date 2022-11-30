@@ -15,10 +15,9 @@ export const getAllTags = async (req, res) => {
         }).select("name");
 
         const tags = getTagsByPopular.map((item) => {
-            const tag = tagsName.find(
+            return tagsName.find(
                 (tag) => tag._id.toString() === item._id.toString()
             );
-            return tag;
         });
 
         res.json(tags);

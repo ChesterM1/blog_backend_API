@@ -20,10 +20,6 @@ const PostSchema = new mongoose.Schema(
             required: true,
         },
         imageUrl: String || Undefined,
-        like: {
-            type: Array,
-            default: [],
-        },
     },
     {
         timestamps: true,

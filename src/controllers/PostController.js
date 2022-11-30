@@ -2,9 +2,9 @@ import { ObjectId } from "mongodb";
 import PostModal from "../models/Post.js";
 import TagsModal from "../models/Tags.js";
 import TagsInPost from "../models/TagsInPost.js";
+import LikeInPostModal from "../models/LikeInPost.js";
 import { removeImg } from "../utils/IMGPostService.js";
 import bodyStrReplace from "../utils/bodyStrReplace.js";
-import { TagsController } from "./index.js";
 
 export const createPost = async (req, res) => {
     try {
@@ -58,14 +58,38 @@ export const createPost = async (req, res) => {
 };
 
 export const getAllPosts = async (req, res) => {
-    const { limit } = req.query;
+    const { limit, popular, activeTags } = req.query;
+    const sortTo = popular === "1" ? { viewCount: -1 } : { createdAt: -1 };
+
     try {
-        const postsCount = await PostModal.count();
-        const posts = await PostModal.find()
-            .sort([["createdAt", -1]])
+        const tag = bodyStrReplace(activeTags);
+
+        const findPostForId = async () => {
+            if (!tag) {
+                return;
+            }
+            const tagsId = await TagsModal.find({ name: tag });
+            const findPostInTags = await TagsInPost.find({ tagsId });
+
+            if (findPostInTags.length < 0) {
+                return;
+            }
+            return findPostInTags?.map((item) => item.postId);
+        };
+
+        const postIdResponse = await findPostForId();
+
+        const posts = await PostModal.find(
+            postIdResponse && {
+                _id: { $in: postIdResponse },
+            }
+        )
+            .sort(sortTo)
             .limit(limit)
             .populate("user")
             .exec();
+
+        const postsCount = tag ? posts.length : await PostModal.count();
 
         for (let item of posts) {
             const { ...user } = item.user._doc;
@@ -107,7 +131,7 @@ export const getAllPosts = async (req, res) => {
 
 export const getOnePost = (req, res) => {
     try {
-        const id = req.params.id;
+        const id = bodyStrReplace(req.params.id);
         if (id) {
             PostModal.findOneAndUpdate(
                 {
@@ -290,34 +314,54 @@ export const updatePost = async (req, res) => {
 
 export const likePost = async (req, res) => {
     try {
-        const postId = req.params.id;
-        const userId = req.body.userId;
+        const postId = bodyStrReplace(req.body.postId);
+        const userId = bodyStrReplace(req.body.userId);
+
         if (!postId || !userId) {
             return res
                 .status(403)
                 .json({ message: "missing UserId or PostsId" });
         }
-        const post = await PostModal.findById(postId);
-        const userIdLike = post?.like.find((elem) => elem === userId);
-
-        if (userIdLike) {
-            await PostModal.findOneAndUpdate(
-                { _id: postId },
-                { $pull: { like: userId } }
-            );
-        } else {
-            await PostModal.findOneAndUpdate(
-                { _id: postId },
-                {
-                    $push: {
-                        like: userId,
-                    },
-                }
-            );
+        const findLike = await LikeInPostModal.find({ userId, postId });
+        if (findLike.length > 0) {
+            return res
+                .status(403)
+                .json(`post ${postId} liked, usage unLike method`);
         }
+
+        const postLiked = new LikeInPostModal({ postId, userId });
+        await postLiked.save();
 
         res.status(200).json(`post ${postId} liked`);
     } catch (err) {
+        res.status(500).json({
+            message: `Post like failed, server error`,
+        });
+        console.log(`[PostController.likePost] ${err}`);
+    }
+};
+
+export const unLikePost = async (req, res) => {
+    try {
+        const postId = bodyStrReplace(req.body.postId);
+        const userId = bodyStrReplace(req.body.userId);
+
+        if (!postId || !userId) {
+            return res
+                .status(403)
+                .json({ message: "missing UserId or PostsId" });
+        }
+        const findLike = await LikeInPostModal.find({ userId, postId });
+
+        if (findLike.length === 0) {
+            res.status(404).json(
+                `this user not liked post ${postId}, not found`
+            );
+        }
+        await LikeInPostModal.findOneAndRemove({ postId, userId });
+
+        res.status(200).json(`post ${postId} unLiked`);
+    } catch (e) {
         res.status(500).json({
             message: `Post like failed, server error`,
         });

@@ -61,7 +61,9 @@ app.get("/posts/:id", PostController.getOnePost);
 
 app.delete("/posts/:id", checkAuth, PostController.removePost);
 
-app.post("/posts/like/:id", checkAuth, PostController.likePost);
+app.post("/posts/like", checkAuth, PostController.likePost);
+
+app.post("/posts/unLike", checkAuth, PostController.unLikePost);
 
 app.patch(
     "/posts/:id",
