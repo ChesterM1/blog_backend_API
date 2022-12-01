@@ -5,6 +5,8 @@ import TagsInPost from "../models/TagsInPost.js";
 import LikeInPostModal from "../models/LikeInPost.js";
 import { removeImg } from "../utils/IMGPostService.js";
 import bodyStrReplace from "../utils/bodyStrReplace.js";
+import jwt from "jsonwebtoken";
+import { SECRET } from "../index.js";
 
 export const createPost = async (req, res) => {
     try {
@@ -59,6 +61,8 @@ export const createPost = async (req, res) => {
 
 export const getAllPosts = async (req, res) => {
     const { limit, popular, activeTags } = req.query;
+    const token = (req.headers.authorization || "").replace(/Bearer\s?/, "");
+    const { _id: userId } = token && jwt.verify(token, SECRET);
     const sortTo = popular === "1" ? { viewCount: -1 } : { createdAt: -1 };
 
     try {
@@ -90,31 +94,57 @@ export const getAllPosts = async (req, res) => {
             .exec();
 
         const postsCount = tag ? posts.length : await PostModal.count();
-
         for (let item of posts) {
             const { ...user } = item.user._doc;
             delete user.passwordHash;
             item.user._doc = user;
         }
 
+        //find Like
+        const getLike = await LikeInPostModal.find({
+            postId: { $in: posts.map((post) => post._id) },
+        });
+
+        const postWithLike = await Promise.allSettled(
+            posts.map(async (post) => {
+                const result = await LikeInPostModal.find({
+                    postId: post._id,
+                });
+                const likeCount = result.length;
+                const likes = result.map((item) => item.userId.toString());
+                const isLiked = userId ? likes.includes(userId) : false;
+                return { id: post._id, likeCount, isLiked };
+            })
+        );
+
         const getTags = await TagsInPost.find({
             postId: { $in: posts.map((post) => post._id) },
         }).populate("tagsId");
 
-        const postWithTags = posts.map((post) => {
+        const postWithTagAndLike = posts.map((post) => {
             const tagFilter = getTags.filter(
                 (tag) => tag.postId.toString() === post._doc._id.toString()
+            );
+            const likeFilter = postWithLike.filter(
+                (like) => like.value.id.toString() === post._id.toString()
             );
 
             return {
                 ...post._doc,
                 tags: tagFilter.map((tag) => tag.tagsId.name),
+                like: likeFilter.reduce(
+                    (_, like) => ({
+                        likeCount: like.value.likeCount,
+                        isLiked: like.value.isLiked,
+                    }),
+                    {}
+                ),
             };
         });
 
         if (limit) {
             res.json({
-                data: postWithTags,
+                data: postWithTagAndLike,
                 totalPost: postsCount,
                 sendPost: limit > posts.length ? posts.length : parseInt(limit),
             });
