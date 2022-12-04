@@ -30,3 +30,9 @@ export const postCreateValidation = [
         .matches(/(^#\S\w*)(,\s#\w*)*?\S$/),
     body("imageUrl", "Неверная ссылка на изображжение").optional().isString(),
 ];
+
+export const AddCommentValidation = [
+    body("userId").isString().notEmpty().withMessage("required field"),
+    body("postId").isString().notEmpty().withMessage("required field"),
+    body("text", "Minimum 3 chars").isLength({ min: 3 }).isString(),
+];

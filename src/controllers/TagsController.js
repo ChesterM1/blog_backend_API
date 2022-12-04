@@ -22,6 +22,6 @@ export const getAllTags = async (req, res) => {
 
         res.json(tags);
     } catch (err) {
-        console.log(`[GET_ALL_POST] : ${err}`);
+        console.log(`[GET_ALL_TAGS] : ${err}`);
     }
 };

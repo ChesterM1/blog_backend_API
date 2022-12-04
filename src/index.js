@@ -4,12 +4,15 @@ import {
     PostController,
     TagsController,
     UserController,
+    CommentController,
 } from "./controllers/index.js";
-import {
-    registerValidation,
-    loginValidation,
-    postCreateValidation,
-} from "./validation/validation.js";
+// import {
+//     registerValidation,
+//     loginValidation,
+//     postCreateValidation,
+//     AddCommentValidation,
+// } from "./validation/validation.js";
+import * as validation from "./validation/validation.js";
 import { handelsValidationErrors, checkAuth } from "./utils/index.js";
 
 import dotenv from "dotenv";
@@ -32,14 +35,14 @@ app.use("/uploads", express.static("uploads"));
 
 app.post(
     "/auth/login",
-    loginValidation,
+    validation.loginValidation,
     handelsValidationErrors,
     UserController.login
 );
 
 app.post(
     "/auth/register",
-    registerValidation,
+    validation.registerValidation,
     handelsValidationErrors,
     UserController.register
 );
@@ -50,7 +53,7 @@ app.post(
     "/posts",
     checkAuth,
     upload.single("image"),
-    postCreateValidation,
+    validation.postCreateValidation,
     handelsValidationErrors,
     PostController.createPost
 );
@@ -69,12 +72,21 @@ app.patch(
     "/posts/:id",
     checkAuth,
     upload.single("image"),
-    postCreateValidation,
+    validation.postCreateValidation,
     handelsValidationErrors,
     PostController.updatePost
 );
 
 app.get("/tags", TagsController.getAllTags);
+
+app.get("/comment/:id", CommentController.getComment);
+app.post(
+    "/comment",
+    checkAuth,
+    validation.AddCommentValidation,
+    handelsValidationErrors,
+    CommentController.AddComment
+);
 
 app.listen(process.env.PORT, (err) => {
     if (err) {

@@ -66,7 +66,7 @@ export const getAllPosts = async (req, res) => {
     const sortTo = popular === "1" ? { viewCount: -1 } : { createdAt: -1 };
 
     try {
-        const tag = bodyStrReplace(activeTags);
+        const tag = activeTags && bodyStrReplace(activeTags);
 
         const findPostForId = async () => {
             if (!tag) {
@@ -101,18 +101,19 @@ export const getAllPosts = async (req, res) => {
         }
 
         //find Like
-        const getLike = await LikeInPostModal.find({
-            postId: { $in: posts.map((post) => post._id) },
-        });
-
         const postWithLike = await Promise.allSettled(
             posts.map(async (post) => {
                 const result = await LikeInPostModal.find({
                     postId: post._id,
                 });
                 const likeCount = result.length;
-                const likes = result.map((item) => item.userId.toString());
-                const isLiked = userId ? likes.includes(userId) : false;
+                // const likes = result.map((item) => item.userId.toString());
+                const likes = await LikeInPostModal.find({
+                    postId: post._id,
+                    userId,
+                }).count();
+                // const isLiked = userId ? likes.includes(userId) : false;
+                const isLiked = likes > 0;
                 return { id: post._id, likeCount, isLiked };
             })
         );
@@ -160,6 +161,9 @@ export const getAllPosts = async (req, res) => {
 };
 
 export const getOnePost = (req, res) => {
+    const token = (req.headers.authorization || "").replace(/Bearer\s?/, "");
+    const { _id: userId } = token && jwt.verify(token, SECRET);
+
     try {
         const id = bodyStrReplace(req.params.id);
         if (id) {
@@ -189,13 +193,29 @@ export const getOnePost = (req, res) => {
                     const { passwordHash, ...newUser } = user._doc;
                     doc.user = newUser;
 
+                    //tags
                     const findTags = await TagsInPost.find({
                         postId: { $in: doc._id },
                     }).populate("tagsId");
 
+                    //likes
+                    const likeCount = await LikeInPostModal.find({
+                        postId: id,
+                    }).count();
+
+                    const isLiked = await LikeInPostModal.find({
+                        postId: id,
+                        userId,
+                    }).count();
+
+                    const like = {
+                        likeCount,
+                        isLiked: isLiked > 0,
+                    };
                     const post = {
                         ...doc._doc,
                         tags: findTags.map((tag) => tag.tagsId.name),
+                        like,
                     };
                     res.json(post);
                 }
@@ -211,7 +231,7 @@ export const getOnePost = (req, res) => {
 
 export const removePost = async (req, res) => {
     try {
-        const id = req.params.id;
+        const id = bodyStrReplace(req.params.id);
 
         if (id) {
             const findTags = await TagsInPost.find({
@@ -227,6 +247,9 @@ export const removePost = async (req, res) => {
                 }
                 await TagsModal.deleteOne({ _id: tag.tagsId });
             }
+
+            //likes
+            await LikeInPostModal.deleteMany({ postId: id });
 
             PostModal.findOneAndDelete(
                 {
@@ -383,10 +406,10 @@ export const unLikePost = async (req, res) => {
         }
         const findLike = await LikeInPostModal.find({ userId, postId });
 
-        if (findLike.length === 0) {
-            res.status(404).json(
-                `this user not liked post ${postId}, not found`
-            );
+        if (!findLike.length) {
+            return res
+                .status(404)
+                .json(`this user not liked post ${postId}, not found`);
         }
         await LikeInPostModal.findOneAndRemove({ postId, userId });
 
