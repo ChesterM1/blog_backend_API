@@ -3,6 +3,7 @@ import PostModal from "../models/Post.js";
 import TagsModal from "../models/Tags.js";
 import TagsInPost from "../models/TagsInPost.js";
 import LikeInPostModal from "../models/LikeInPost.js";
+import CommentModal from "../models/Comment.js";
 import { removeImg } from "../utils/IMGPostService.js";
 import bodyStrReplace from "../utils/bodyStrReplace.js";
 import jwt from "jsonwebtoken";
@@ -101,23 +102,31 @@ export const getAllPosts = async (req, res) => {
         }
 
         //find Like
-        const postWithLike = await Promise.allSettled(
+        const findPostDependence = await Promise.allSettled(
             posts.map(async (post) => {
-                const result = await LikeInPostModal.find({
+                const likeResult = await LikeInPostModal.find({
                     postId: post._id,
                 });
-                const likeCount = result.length;
-                // const likes = result.map((item) => item.userId.toString());
+                const likeCount = likeResult.length;
                 const likes = await LikeInPostModal.find({
                     postId: post._id,
                     userId,
                 }).count();
-                // const isLiked = userId ? likes.includes(userId) : false;
                 const isLiked = likes > 0;
-                return { id: post._id, likeCount, isLiked };
+
+                const commentCount = await CommentModal.find({
+                    postId: post._id,
+                }).count();
+                return { id: post._id, likeCount, isLiked, commentCount };
             })
         );
 
+        //comment
+        // const comment = await CommentModal.find({
+        //     postId: { $in: posts.map((item) => item._id) },
+        // });
+        // console.log(comment);
+        //tags
         const getTags = await TagsInPost.find({
             postId: { $in: posts.map((post) => post._id) },
         }).populate("tagsId");
@@ -126,19 +135,23 @@ export const getAllPosts = async (req, res) => {
             const tagFilter = getTags.filter(
                 (tag) => tag.postId.toString() === post._doc._id.toString()
             );
-            const likeFilter = postWithLike.filter(
+            const postDependence = findPostDependence.filter(
                 (like) => like.value.id.toString() === post._id.toString()
             );
 
             return {
                 ...post._doc,
                 tags: tagFilter.map((tag) => tag.tagsId.name),
-                like: likeFilter.reduce(
+                like: postDependence.reduce(
                     (_, like) => ({
                         likeCount: like.value.likeCount,
                         isLiked: like.value.isLiked,
                     }),
                     {}
+                ),
+                comment: postDependence.reduce(
+                    (_, count) => count.value.commentCount,
+                    0
                 ),
             };
         });
@@ -212,10 +225,15 @@ export const getOnePost = (req, res) => {
                         likeCount,
                         isLiked: isLiked > 0,
                     };
+                    //comment
+                    const comment = await CommentModal.find({
+                        postId: id,
+                    }).count();
                     const post = {
                         ...doc._doc,
                         tags: findTags.map((tag) => tag.tagsId.name),
                         like,
+                        comment,
                     };
                     res.json(post);
                 }
@@ -248,6 +266,8 @@ export const removePost = async (req, res) => {
                 await TagsModal.deleteOne({ _id: tag.tagsId });
             }
 
+            //comments
+            await CommentModal.deleteMany({ postId: id });
             //likes
             await LikeInPostModal.deleteMany({ postId: id });
 

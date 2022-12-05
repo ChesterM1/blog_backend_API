@@ -80,6 +80,7 @@ app.patch(
 app.get("/tags", TagsController.getAllTags);
 
 app.get("/comment/:id", CommentController.getComment);
+
 app.post(
     "/comment",
     checkAuth,
@@ -87,6 +88,10 @@ app.post(
     handelsValidationErrors,
     CommentController.AddComment
 );
+
+app.get("/comment", CommentController.lastComment);
+
+app.delete("/comment/:id", checkAuth, CommentController.removeComment);
 
 app.listen(process.env.PORT, (err) => {
     if (err) {
