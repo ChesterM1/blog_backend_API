@@ -93,6 +93,14 @@ app.get("/comment", CommentController.lastComment);
 
 app.delete("/comment/:id", checkAuth, CommentController.removeComment);
 
+app.post("/comment/like", checkAuth, CommentController.like);
+
+app.post("/comment/removelike", checkAuth, CommentController.removeLike);
+
+app.post("/comment/dislike", checkAuth, CommentController.dislike);
+
+app.post("/comment/removedislike", checkAuth, CommentController.removeDislike);
+
 app.listen(process.env.PORT, (err) => {
     if (err) {
         return console.log(err);

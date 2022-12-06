@@ -6,6 +6,8 @@ import LikeInPostModal from "../models/LikeInPost.js";
 import CommentModal from "../models/Comment.js";
 import { removeImg } from "../utils/IMGPostService.js";
 import bodyStrReplace from "../utils/bodyStrReplace.js";
+import LikedCommentModal from "../models/LikedComment.js";
+import DislikeCommentModal from "../models/DislikeComment.js";
 import jwt from "jsonwebtoken";
 import { SECRET } from "../index.js";
 
@@ -121,12 +123,6 @@ export const getAllPosts = async (req, res) => {
             })
         );
 
-        //comment
-        // const comment = await CommentModal.find({
-        //     postId: { $in: posts.map((item) => item._id) },
-        // });
-        // console.log(comment);
-        //tags
         const getTags = await TagsInPost.find({
             postId: { $in: posts.map((post) => post._id) },
         }).populate("tagsId");
@@ -267,7 +263,12 @@ export const removePost = async (req, res) => {
             }
 
             //comments
+            const comment = await CommentModal.find({ postId: id });
+            const getId = comment.map((item) => item._id);
             await CommentModal.deleteMany({ postId: id });
+            await LikedCommentModal.deleteMany({ commentId: { $in: getId } });
+            await DislikeCommentModal.deleteMany({ commentId: { $in: getId } });
+
             //likes
             await LikeInPostModal.deleteMany({ postId: id });
 
