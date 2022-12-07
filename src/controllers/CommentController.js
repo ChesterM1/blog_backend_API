@@ -270,3 +270,27 @@ export const removeDislike = async (req, res) => {
         return res.status(500).json({ message: "server error" });
     }
 };
+
+export const editComment = async (req, res) => {
+    try {
+        const id = bodyStrReplace(req.body.id);
+        const text = bodyStrReplace(req.body.text);
+        if (!id || !text) {
+            return res
+                .status(400)
+                .json({ message: "comment id or text not found" });
+        }
+
+        await CommentModal.updateOne(
+            {
+                _id: id,
+            },
+            { text }
+        );
+
+        res.json({ message: true });
+    } catch (err) {
+        console.log("[EDIT_COMMENT]", err);
+        return res.status(500).json({ message: "server error" });
+    }
+};

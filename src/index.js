@@ -89,6 +89,8 @@ app.post(
     CommentController.AddComment
 );
 
+app.patch("/comment", checkAuth, CommentController.editComment);
+
 app.get("/comment", CommentController.lastComment);
 
 app.delete("/comment/:id", checkAuth, CommentController.removeComment);
