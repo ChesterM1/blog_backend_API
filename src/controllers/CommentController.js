@@ -1,7 +1,9 @@
 import bodyStrReplace from "../utils/bodyStrReplace.js";
 import CommentModal from "../models/Comment.js";
 import LikedCommentModal from "../models/LikedComment.js";
+import PostModal from "../models/Post.js";
 import DislikeCommentModal from "../models/DislikeComment.js";
+import { ObjectId } from "mongodb";
 import jwt from "jsonwebtoken";
 import { SECRET } from "../index.js";
 
@@ -30,8 +32,19 @@ export const getComment = async (req, res) => {
         const { _id: userId } = token && jwt.verify(token, SECRET);
 
         const postId = bodyStrReplace(req.params.id);
+
         if (!postId) {
             return res.status(400).json({ message: "enter postId" });
+        }
+        if (postId.length !== 24) {
+            return res.status(404).json({ message: "post id length 25" });
+        }
+        const post = await PostModal.find({ _id: postId }).count();
+
+        if (post === 0) {
+            return res
+                .status(404)
+                .json({ message: "wrong post id, post not found" });
         }
         const comment = await CommentModal.find({ postId })
             .populate("userId")

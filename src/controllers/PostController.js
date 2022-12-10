@@ -8,6 +8,7 @@ import { removeImg } from "../utils/IMGPostService.js";
 import bodyStrReplace from "../utils/bodyStrReplace.js";
 import LikedCommentModal from "../models/LikedComment.js";
 import DislikeCommentModal from "../models/DislikeComment.js";
+import { findPostForId } from "./Posts/helpers.js";
 import jwt from "jsonwebtoken";
 import { SECRET } from "../index.js";
 
@@ -33,7 +34,6 @@ export const createPost = async (req, res) => {
             title: bodyStrReplace(req.body.title),
             text: bodyStrReplace(req.body.text),
             imageUrl: req.file ? `/uploads/${req.fileName}` : undefined,
-            tags: bodyStrReplace(req.body.tags)?.split(", ") || [],
             user: req.userId,
         });
 
@@ -62,36 +62,135 @@ export const createPost = async (req, res) => {
     }
 };
 
-export const getAllPosts = async (req, res) => {
-    const { limit, popular, activeTags } = req.query;
-    const token = (req.headers.authorization || "").replace(/Bearer\s?/, "");
-    const { _id: userId } = token && jwt.verify(token, SECRET);
-    const sortTo = popular === "1" ? { viewCount: -1 } : { createdAt: -1 };
-
+export const getAllPopularPosts = async (req, res) => {
     try {
-        const tag = activeTags && bodyStrReplace(activeTags);
+        const limit = bodyStrReplace(req.query.limit);
+        const popular = bodyStrReplace(req.query.popular);
+        const activeTags = req.query.activeTags;
+        const tag = activeTags && bodyStrReplace(req.query.activeTags);
+        const token = (req.headers.authorization || "").replace(
+            /Bearer\s?/,
+            ""
+        );
 
-        const findPostForId = async () => {
-            if (!tag) {
-                return;
-            }
-            const tagsId = await TagsModal.find({ name: tag });
-            const findPostInTags = await TagsInPost.find({ tagsId });
+        const { _id: userId } = token && jwt.verify(token, SECRET);
+        if (popular !== "1") {
+            return res.status(403).json({
+                message: "bad request, 0 = last post, 1 = popular posts",
+            });
+        }
 
-            if (findPostInTags.length < 0) {
-                return;
-            }
-            return findPostInTags?.map((item) => item.postId);
-        };
-
-        const postIdResponse = await findPostForId();
+        const postIdResponse = await findPostForId(tag, limit);
 
         const posts = await PostModal.find(
             postIdResponse && {
                 _id: { $in: postIdResponse },
             }
         )
-            .sort(sortTo)
+            .sort({ viewCount: -1 })
+            .limit(limit)
+            .populate("user")
+            .exec();
+
+        const postsCount = tag ? posts.length : await PostModal.count();
+        for (let item of posts) {
+            const { ...user } = item.user._doc;
+            delete user.passwordHash;
+            item.user._doc = user;
+        }
+        const findPostDependence = await Promise.allSettled(
+            posts.map(async (post) => {
+                const likeResult = await LikeInPostModal.find({
+                    postId: post._id,
+                });
+                const likeCount = likeResult.length;
+                const likes = await LikeInPostModal.find({
+                    postId: post._id,
+                    userId,
+                }).count();
+                const isLiked = likes > 0;
+
+                const commentCount = await CommentModal.find({
+                    postId: post._id,
+                }).count();
+                return {
+                    id: post._id,
+                    likeCount,
+                    isLiked,
+                    commentCount,
+                };
+            })
+        );
+
+        const getTags = await TagsInPost.find({
+            postId: { $in: posts.map((post) => post._id) },
+        }).populate("tagsId");
+
+        const postWithTagAndLike = posts.map((post) => {
+            const tagFilter = getTags.filter(
+                (tag) => tag.postId.toString() === post._doc._id.toString()
+            );
+            const postDependence = findPostDependence.filter(
+                (like) => like.value.id.toString() === post._id.toString()
+            );
+
+            return {
+                ...post._doc,
+                tags: tagFilter.map((tag) => tag.tagsId.name),
+                like: postDependence.reduce(
+                    (_, like) => ({
+                        likeCount: like.value.likeCount,
+                        isLiked: like.value.isLiked,
+                    }),
+                    {}
+                ),
+                comment: postDependence.reduce(
+                    (_, count) => count.value.commentCount,
+                    0
+                ),
+            };
+        });
+
+        if (limit) {
+            res.json({
+                data: postWithTagAndLike,
+                totalPost: postsCount,
+                sendPost: limit > posts.length ? posts.length : parseInt(limit),
+            });
+        } else {
+            res.json(posts);
+        }
+    } catch (err) {
+        console.log("[getAllPopularPosts]", err);
+        res.status(500).json({
+            message: "Не удалось получить статьи",
+        });
+    }
+};
+
+export const getAllLastPosts = async (req, res) => {
+    try {
+        const { limit, popular, activeTags } = req.query;
+        const token = (req.headers.authorization || "").replace(
+            /Bearer\s?/,
+            ""
+        );
+        const { _id: userId } = token && jwt.verify(token, SECRET);
+        const tag = activeTags && bodyStrReplace(activeTags);
+        if (popular !== "0") {
+            return res.status(403).json({
+                message: "bad request, 0 = last post, 1 = popular posts",
+            });
+        }
+
+        const postIdResponse = await findPostForId(tag);
+
+        const posts = await PostModal.find(
+            postIdResponse && {
+                _id: { $in: postIdResponse },
+            }
+        )
+            .sort({ createdAt: -1 })
             .limit(limit)
             .populate("user")
             .exec();
@@ -162,7 +261,7 @@ export const getAllPosts = async (req, res) => {
             res.json(posts);
         }
     } catch (err) {
-        console.log("[getAppPosts]", err);
+        console.log("[getAllLastPosts]", err);
         res.status(500).json({
             message: "Не удалось получить статьи",
         });

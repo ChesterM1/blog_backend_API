@@ -58,7 +58,8 @@ app.post(
     PostController.createPost
 );
 
-app.get("/posts", PostController.getAllPosts);
+app.get("/posts/last", PostController.getAllLastPosts);
+app.get("/posts/popular", PostController.getAllPopularPosts);
 
 app.get("/posts/:id", PostController.getOnePost);
 
