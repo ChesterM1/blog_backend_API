@@ -3,7 +3,7 @@ import CommentModal from "../models/Comment.js";
 import LikedCommentModal from "../models/LikedComment.js";
 import PostModal from "../models/Post.js";
 import DislikeCommentModal from "../models/DislikeComment.js";
-import { ObjectId } from "mongodb";
+import { userReaction } from "./comment/helpers.js";
 import jwt from "jsonwebtoken";
 import { SECRET } from "../index.js";
 
@@ -56,9 +56,7 @@ export const getComment = async (req, res) => {
             return { ...other, user: { _id, fullName, createdAt } };
         });
 
-        const commentIdArray = sliceComment.map((item) => item._id);
-
-        const findReactionCountToJson = await Promise.allSettled(
+        const findReactionCount = await Promise.allSettled(
             sliceComment.map(async (item) => {
                 const likedCount = await LikedCommentModal.find({
                     commentId: item._id,
@@ -71,22 +69,8 @@ export const getComment = async (req, res) => {
             })
         );
 
-        const userReaction = async (userId) => {
-            if (!userId) {
-                return { like: [], dislike: [] };
-            }
-            const like = await LikedCommentModal.find({
-                userId,
-                commentId: { $in: commentIdArray },
-            });
-
-            const dislike = await DislikeCommentModal.find({
-                userId,
-                commentId: { $in: commentIdArray },
-            });
-            return { like, dislike };
-        };
-        const { like, dislike } = await userReaction(userId);
+        const commentIdArray = sliceComment.map((item) => item._id);
+        const { like, dislike } = await userReaction(userId, commentIdArray);
 
         const enrichmentOfComment = sliceComment.map((comment) => {
             const isLiked = like.filter(
@@ -95,7 +79,7 @@ export const getComment = async (req, res) => {
             const IsDisliked = dislike.filter(
                 (item) => item.commentId.toString() === comment._id.toString()
             );
-            const commentReaction = findReactionCountToJson.filter(
+            const commentReaction = findReactionCount.filter(
                 (item) => item.value._id.toString() === comment._id.toString()
             );
 
@@ -117,19 +101,60 @@ export const getComment = async (req, res) => {
 
 export const lastComment = async (req, res) => {
     try {
+        const token = (req.headers.authorization || "").replace(
+            /Bearer\s?/,
+            ""
+        );
+        const { _id: userId } = token && jwt.verify(token, SECRET);
+
         const limit = req.query.limit ? bodyStrReplace(req.query.limit) : 2;
         const comment = await CommentModal.find()
             .populate("userId")
             .sort({ createdAt: -1 })
             .limit(parseInt(limit));
 
-        const responseComment = comment.map((item) => {
+        const sliceComment = comment.map((item) => {
             const { _id, fullName, createdAt } = item.userId;
             const { userId, ...other } = item._doc;
             return { ...other, user: { _id, fullName, createdAt } };
         });
 
-        res.json(responseComment);
+        const findReactionCount = await Promise.allSettled(
+            sliceComment.map(async (item) => {
+                const likedCount = await LikedCommentModal.find({
+                    commentId: item._id,
+                }).count();
+
+                const dislikeCount = await DislikeCommentModal.find({
+                    commentId: item._id,
+                }).count();
+                return { _id: item._id, likedCount, dislikeCount };
+            })
+        );
+        const commentIdArray = sliceComment.map((item) => item._id);
+        const { like, dislike } = await userReaction(userId, commentIdArray);
+
+        const enrichmentOfComment = sliceComment.map((comment) => {
+            const isLiked = like.filter(
+                (item) => item.commentId.toString() === comment._id.toString()
+            );
+            const IsDisliked = dislike.filter(
+                (item) => item.commentId.toString() === comment._id.toString()
+            );
+            const commentReaction = findReactionCount.filter(
+                (item) => item.value._id.toString() === comment._id.toString()
+            );
+
+            return {
+                ...comment,
+                likedCount: commentReaction[0].value.likedCount,
+                dislikeCount: commentReaction[0].value.dislikeCount,
+                isLiked: isLiked.length > 0,
+                IsDisliked: IsDisliked.length > 0,
+            };
+        });
+
+        res.json(enrichmentOfComment);
     } catch (err) {
         console.log("[LAST_COMMENT]", err);
         res.status(500).json({ message: "server error" });
