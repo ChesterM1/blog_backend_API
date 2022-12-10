@@ -6,18 +6,12 @@ import {
     UserController,
     CommentController,
 } from "./controllers/index.js";
-// import {
-//     registerValidation,
-//     loginValidation,
-//     postCreateValidation,
-//     AddCommentValidation,
-// } from "./validation/validation.js";
 import * as validation from "./validation/validation.js";
 import { handelsValidationErrors, checkAuth } from "./utils/index.js";
+import { upload } from "./utils/IMGPostService.js";
 
 import dotenv from "dotenv";
 import cors from "cors";
-import { upload } from "./utils/IMGPostService.js";
 
 dotenv.config();
 export const SECRET = process.env.SECRET;
